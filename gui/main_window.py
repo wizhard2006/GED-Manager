@@ -102,6 +102,21 @@ class GEDManagerApp:
                 self._action_mappages()
             elif event == "-PARAMS-":
                 self._action_params()
+            elif event == "-SCAN-DONE-":
+                # Résultat du scan asynchrone
+                result = values["-SCAN-DONE-"]
+                if result and isinstance(result, str) and os.path.exists(result):
+                    self._log(f"Scan terminé : {os.path.basename(result)}")
+                    self._traiter_document(result)
+                elif result is None:
+                    self._log("Scan annulé ou aucun fichier détecté.")
+                    sg.popup_error(
+                        "Aucun fichier récupéré du scanner.\n"
+                        "Vérifiez que le scanner est allumé et le dossier de sortie configuré."
+                    )
+                else:
+                    self._log(f"Erreur scanner : {result}")
+                    sg.popup_error(f"Erreur lors du scan :\n{result}")
 
         self.window.close()
         self.db.close()
