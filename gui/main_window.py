@@ -611,11 +611,14 @@ class GEDManagerApp:
             sg.popup_error(f"Fichier log introuvable :\n{log_path}")
 
     def _action_keywords(self):
-        """Fenetre de gestion des mots-cles (keywords.json)"""
+        """Fenetre de gestion des mots-cles (keywords.json) - v1.4 : edition + tri"""
         import json
         from core.classifier import KEYWORDS_FILE, TYPES_FILE
 
-        def load_flat():
+        # --- Fonctions utilitaires ---
+
+        def load_flat(sort_col=0):
+            """Charge et aplatit keywords.json, trie par colonne (0=mot-cle, 1=dossier, 2=categorie)."""
             if not os.path.exists(KEYWORDS_FILE):
                 return []
             with open(KEYWORDS_FILE, encoding="utf-8") as f:
@@ -626,15 +629,24 @@ class GEDManagerApp:
                     continue
                 if isinstance(entries, dict):
                     for kw, folder in entries.items():
-                        flat.append((kw, folder, cat))
-            return sorted(flat, key=lambda x: x[2] + x[0])
+                        flat.append([kw, folder, cat])
+            flat.sort(key=lambda x: x[sort_col].lower())
+            return flat
 
-        def save_entry(keyword, folder, category="Personnalise"):
+        def save_entry(keyword, folder, category="Personnalise", old_keyword=None, old_category=None):
+            """Ajoute ou met a jour une entree dans keywords.json.
+            Si old_keyword/old_category sont fournis, supprime l'ancienne entree avant d'ajouter."""
             if not os.path.exists(KEYWORDS_FILE):
                 data = {}
             else:
                 with open(KEYWORDS_FILE, encoding="utf-8") as f:
                     data = json.load(f)
+            # Supprimer l'ancienne entree si on est en mode edition
+            if old_keyword and old_category:
+                old_kw_lower = old_keyword.lower().strip()
+                if old_category in data and old_kw_lower in data[old_category]:
+                    del data[old_category][old_kw_lower]
+            # Ajouter/mettre a jour
             if category not in data:
                 data[category] = {}
             data[category][keyword.lower().strip()] = folder.strip()
@@ -651,15 +663,28 @@ class GEDManagerApp:
             with open(KEYWORDS_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-        flat = load_flat()
-        rows = [[kw, folder, cat] for kw, folder, cat in flat]
+        # --- Etat initial ---
+        sort_col = 0          # 0=Mot-cle, 1=Dossier, 2=Categorie
+        edit_mode = False     # True quand on edite une ligne existante
+        edit_orig_kw = None   # Mot-cle original avant edition
+        edit_orig_cat = None  # Categorie originale avant edition
 
+        rows = load_flat(sort_col)
+
+        # --- Layout ---
         layout = [
             [sg.Text("Mots-cles de classification", font=FONT_TITLE)],
             [sg.Text(
                 "Recherches dans la 1ere page du document pour detecter l'origine.",
                 font=FONT_MAIN
             )],
+            # Tri
+            [
+                sg.Text("Trier par :", font=FONT_MAIN),
+                sg.Radio("Mot-cle", "SORT", default=True, key="-SORT0-", enable_events=True),
+                sg.Radio("Dossier cible", "SORT", key="-SORT1-", enable_events=True),
+                sg.Radio("Categorie", "SORT", key="-SORT2-", enable_events=True),
+            ],
             [sg.Table(
                 values=rows if rows else [["--", "--", "--"]],
                 headings=["Mot-cle", "Dossier cible", "Categorie"],
@@ -671,7 +696,8 @@ class GEDManagerApp:
                 enable_events=True,
             )],
             [sg.HorizontalSeparator()],
-            [sg.Text("Ajouter un mot-cle :", font=FONT_MAIN)],
+            # Formulaire ajout / edition
+            [sg.Text("Ajouter un mot-cle :", font=FONT_MAIN, key="-FORM-TITLE-")],
             [
                 sg.Text("Mot-cle :", size=(13, 1)),
                 sg.Input(key="-NKW-", size=(25, 1)),
@@ -690,13 +716,16 @@ class GEDManagerApp:
             [sg.HorizontalSeparator()],
             [
                 sg.Button("Ajouter", key="-KADD-"),
+                sg.Button("Enregistrer modification", key="-KEDIT-", visible=False),
+                sg.Button("Annuler edition", key="-KCANCEL-", visible=False),
                 sg.Button("Supprimer selection", key="-KDEL-"),
             ],
             [sg.HorizontalSeparator()],
+            # Section Types de documents
             [sg.Text("Types de documents (liste de renommage) :", font=FONT_MAIN)],
             [sg.Listbox(values=[], key="-TYPELIST-", size=(40, 4), enable_events=True)],
-            [sg.Text("Ajouter :", size=(8,1)),
-             sg.Input(key="-NEWTYPE-", size=(20,1)),
+            [sg.Text("Ajouter :", size=(8, 1)),
+             sg.Input(key="-NEWTYPE-", size=(20, 1)),
              sg.Button("Ajouter type", key="-ADDTYPE-"),
              sg.Button("Supprimer type", key="-DELTYPE-")],
             [sg.HorizontalSeparator()],
@@ -705,7 +734,7 @@ class GEDManagerApp:
 
         win = sg.Window("Mots-cles", layout, modal=True, finalize=True)
 
-        # Charger la liste des types dans la listbox
+        # --- Fonctions types ---
         def load_types():
             if not os.path.exists(TYPES_FILE):
                 return []
@@ -723,15 +752,55 @@ class GEDManagerApp:
             with open(TYPES_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
+        def reset_form():
+            """Remet le formulaire en mode Ajouter."""
+            nonlocal edit_mode, edit_orig_kw, edit_orig_cat
+            edit_mode = False
+            edit_orig_kw = None
+            edit_orig_cat = None
+            win["-FORM-TITLE-"].update("Ajouter un mot-cle :")
+            win["-NKW-"].update("")
+            win["-NFOLDER-"].update("")
+            win["-NCAT-"].update("Personnalise")
+            win["-KADD-"].update(visible=True)
+            win["-KEDIT-"].update(visible=False)
+            win["-KCANCEL-"].update(visible=False)
+
         current_types = load_types()
         win["-TYPELIST-"].update(values=current_types)
 
+        # --- Boucle evenements ---
         while True:
             ev, vals = win.read()
+
             if ev in (sg.WIN_CLOSED, "-KCLOSE-"):
                 self.classifier.reload_keywords()
                 self._log("Mots-cles recharges.")
                 break
+
+            # --- Tri ---
+            elif ev in ("-SORT0-", "-SORT1-", "-SORT2-"):
+                sort_col = int(ev[-2])  # extrait 0, 1 ou 2
+                rows = load_flat(sort_col)
+                win["-KTABLE-"].update(values=rows if rows else [["--", "--", "--"]])
+
+            # --- Clic sur une ligne : charger en edition ---
+            elif ev == "-KTABLE-" and vals["-KTABLE-"]:
+                idx = vals["-KTABLE-"][0]
+                if 0 <= idx < len(rows):
+                    kw_sel, folder_sel, cat_sel = rows[idx][0], rows[idx][1], rows[idx][2]
+                    edit_mode = True
+                    edit_orig_kw = kw_sel
+                    edit_orig_cat = cat_sel
+                    win["-FORM-TITLE-"].update(f"Modifier le mot-cle : '{kw_sel}'")
+                    win["-NKW-"].update(kw_sel)
+                    win["-NFOLDER-"].update(folder_sel)
+                    win["-NCAT-"].update(cat_sel)
+                    win["-KADD-"].update(visible=False)
+                    win["-KEDIT-"].update(visible=True)
+                    win["-KCANCEL-"].update(visible=True)
+
+            # --- Ajouter ---
             elif ev == "-KADD-":
                 kw = vals["-NKW-"].strip()
                 folder = vals["-NFOLDER-"].strip()
@@ -743,25 +812,50 @@ class GEDManagerApp:
                     continue
                 save_entry(kw, folder, cat)
                 self._log(f"Mot-cle ajoute : '{kw}' -> '{folder}'")
-                flat = load_flat()
-                rows = [[k2, f2, c2] for k2, f2, c2 in flat]
-                win["-KTABLE-"].update(values=rows)
-                win["-NKW-"].update("")
-                win["-NFOLDER-"].update("")
+                rows = load_flat(sort_col)
+                win["-KTABLE-"].update(values=rows if rows else [["--", "--", "--"]])
+                reset_form()
+
+            # --- Enregistrer modification ---
+            elif ev == "-KEDIT-":
+                kw = vals["-NKW-"].strip()
+                folder = vals["-NFOLDER-"].strip()
+                cat = vals["-NCAT-"].strip() or "Personnalise"
+                if os.path.isabs(folder) and folder.startswith(self.config.ged_root):
+                    folder = os.path.relpath(folder, self.config.ged_root)
+                if not kw or not folder:
+                    sg.popup_error("Mot-cle et dossier cible sont obligatoires.")
+                    continue
+                save_entry(kw, folder, cat,
+                           old_keyword=edit_orig_kw,
+                           old_category=edit_orig_cat)
+                self._log(f"Mot-cle modifie : '{edit_orig_kw}' -> '{kw}' / '{folder}'")
+                rows = load_flat(sort_col)
+                win["-KTABLE-"].update(values=rows if rows else [["--", "--", "--"]])
+                reset_form()
+
+            # --- Annuler edition ---
+            elif ev == "-KCANCEL-":
+                reset_form()
+
+            # --- Supprimer ---
             elif ev == "-KDEL-" and vals["-KTABLE-"]:
                 idx = vals["-KTABLE-"][0]
-                kw_del = rows[idx][0]
-                cat_del = rows[idx][2]
-                rep = sg.popup_yes_no(
-                    f"Supprimer le mot-cle '{kw_del}' ?",
-                    title="Confirmation"
-                )
-                if rep == "Yes":
-                    delete_entry(kw_del, cat_del)
-                    flat = load_flat()
-                    rows = [[k2, f2, c2] for k2, f2, c2 in flat]
-                    win["-KTABLE-"].update(values=rows)
-                    self._log(f"Mot-cle supprime : '{kw_del}'")
+                if 0 <= idx < len(rows):
+                    kw_del = rows[idx][0]
+                    cat_del = rows[idx][2]
+                    rep = sg.popup_yes_no(
+                        f"Supprimer le mot-cle '{kw_del}' ?",
+                        title="Confirmation"
+                    )
+                    if rep == "Yes":
+                        delete_entry(kw_del, cat_del)
+                        rows = load_flat(sort_col)
+                        win["-KTABLE-"].update(values=rows if rows else [["--", "--", "--"]])
+                        self._log(f"Mot-cle supprime : '{kw_del}'")
+                        reset_form()
+
+            # --- Types de documents ---
             elif ev == "-ADDTYPE-":
                 new_type = vals["-NEWTYPE-"].strip()
                 if new_type and new_type not in current_types:
