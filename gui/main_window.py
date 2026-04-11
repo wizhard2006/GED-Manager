@@ -108,6 +108,10 @@ class GEDManagerApp:
                 self._action_params()
             elif event == "-KEYWORDS-":
                 self._action_keywords()
+            elif event == "-HISTORIQUE-":
+                self._action_historique()
+            elif event == "-OPENLOG-":
+                self._action_open_log()
             elif event == "-SCAN-DONE-":
                 # Résultat du scan asynchrone
                 result = values["-SCAN-DONE-"]
@@ -194,6 +198,10 @@ class GEDManagerApp:
         # OCR
         self._log("OCR en cours...")
         text = self.ocr.extract_text(file_path)
+        # Diagnostic : afficher les 300 premiers caracteres de la 1ere page
+        first_page = text.split("\f")[0] if "\f" in text else text[:3000]
+        preview = first_page[:300].replace("\n", " ").strip()
+        self._log(f"[OCR] Extrait : {preview[:200]}...")
         if not text.strip():
             self._log("Aucun texte extrait — envoi en quarantaine.")
             dest = self.file_manager.send_to_quarantine(
@@ -242,10 +250,18 @@ class GEDManagerApp:
         if not suggestions:
             suggestions = ["(aucune suggestion)"]
 
+        # Texte OCR 1ere page pour affichage
+        first_page_text = text.split("\f")[0] if "\f" in text else text[:3000]
+        ocr_preview = first_page_text[:1500]
+
         layout = [
             [sg.Text(f"Document : {filename}", font=FONT_MAIN)],
             [sg.Text("Mots-clés détectés :", font=FONT_MAIN)],
             [sg.Text(detected_kws or "aucun", font=FONT_MONO)],
+            [sg.HorizontalSeparator()],
+            [sg.Text("Texte reconnu par OCR (1ère page) :", font=FONT_MAIN)],
+            [sg.Multiline(ocr_preview, size=(60, 6), disabled=True,
+                          font=FONT_MONO, autoscroll=False)],
             [sg.HorizontalSeparator()],
             [sg.Text("Suggestions :", font=FONT_MAIN)],
             [sg.Listbox(values=suggestions, size=(55, 4), key="-SUGGESTIONS-",
@@ -537,6 +553,62 @@ class GEDManagerApp:
 
 
     # -- MOTS-CLES -----------------------------------------------------------
+
+
+    def _action_historique(self):
+        """Affiche les 50 derniers documents traites"""
+        history = self.db.get_history(limit=50)
+        if not history:
+            sg.popup("Aucun document dans l'historique.", title="Historique")
+            return
+
+        rows = []
+        for r in history:
+            rows.append([
+                r.get("processed_at", "")[:16],
+                r.get("filename", ""),
+                r.get("action", ""),
+                r.get("destination_path", ""),
+            ])
+
+        layout = [
+            [sg.Text("Historique des 50 derniers documents", font=FONT_TITLE)],
+            [sg.Table(
+                values=rows,
+                headings=["Date", "Fichier", "Action", "Destination"],
+                col_widths=[14, 25, 8, 35],
+                auto_size_columns=False,
+                num_rows=min(20, len(rows)),
+                key="-HTABLE-",
+                justification="left",
+                enable_events=True,
+            )],
+            [sg.Button("Ouvrir le dossier", key="-HOPEN-"),
+             sg.Button("Fermer", key="-HCLOSE-")],
+        ]
+
+        win = sg.Window("Historique", layout, modal=True, finalize=True)
+        while True:
+            ev, vals = win.read()
+            if ev in (sg.WIN_CLOSED, "-HCLOSE-"):
+                break
+            elif ev == "-HOPEN-" and vals["-HTABLE-"]:
+                idx = vals["-HTABLE-"][0]
+                dest = rows[idx][3]
+                folder = os.path.dirname(dest)
+                if os.path.isdir(folder):
+                    os.startfile(folder)
+                else:
+                    sg.popup_error(f"Dossier introuvable :\n{folder}")
+        win.close()
+
+    def _action_open_log(self):
+        """Ouvre le fichier log dans le Bloc-notes"""
+        log_path = os.path.abspath(self.config.log_file)
+        if os.path.exists(log_path):
+            os.startfile(log_path)
+        else:
+            sg.popup_error(f"Fichier log introuvable :\n{log_path}")
 
     def _action_keywords(self):
         """Fenetre de gestion des mots-cles (keywords.json)"""
