@@ -99,13 +99,44 @@ class ScannerInterface:
             ]
             if pdf_or_img:
                 new_file = sorted(pdf_or_img)[-1]
-                self.logger.success(f"Nouveau fichier détecté : {new_file}")
-                return new_file
+                self.logger.info(f"Fichier détecté, attente stabilisation : {new_file}")
+                # Attendre que le fichier soit stable (plus en cours d'écriture)
+                stable_file = self._wait_for_stable(new_file)
+                if stable_file:
+                    self.logger.success(f"Fichier stable et prêt : {new_file}")
+                    return new_file
+                else:
+                    self.logger.warning(f"Fichier instable ignoré : {new_file}")
+                    before = after  # Continuer la surveillance
 
         self.logger.warning("Timeout dépassé, aucun nouveau fichier détecté.")
         return None
 
     # ── Point d'entrée unifié ─────────────────────────────────────────────────
+
+
+    def _wait_for_stable(self, file_path: str, checks: int = 3, interval: float = 1.0) -> bool:
+        """
+        Verifie que le fichier est stable (taille constante) avant traitement.
+        Effectue `checks` mesures espacees de `interval` secondes.
+        Retourne True si le fichier est stable, False sinon.
+        """
+        last_size = -1
+        stable_count = 0
+        for _ in range(checks + 5):
+            time.sleep(interval)
+            try:
+                current_size = os.path.getsize(file_path)
+            except OSError:
+                return False  # Fichier disparu (renommage en cours)
+            if current_size == last_size and current_size > 0:
+                stable_count += 1
+                if stable_count >= checks:
+                    return True
+            else:
+                stable_count = 0  # Reset si taille a change
+            last_size = current_size
+        return False
 
     def acquire(self, mode: str = "watch") -> str | None:
         """
