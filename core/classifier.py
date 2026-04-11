@@ -9,7 +9,16 @@ Classification des documents par détection de mots-clés.
 import re
 import json
 import os
+import unicodedata
 from db.database import Database
+
+
+def normalize(s: str) -> str:
+    """Normalise une chaine : minuscules + suppression des accents.
+    Permet une comparaison insensible a la casse ET aux accents.
+    Ex: 'Société' -> 'societe', 'EDF' -> 'edf'
+    """
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii").lower()
 
 KEYWORDS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "keywords.json")
 TYPES_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "document_types.json")
@@ -22,14 +31,14 @@ def load_keywords() -> dict:
     try:
         with open(KEYWORDS_FILE, encoding="utf-8") as f:
             data = json.load(f)
-        # Aplatir toutes les catégories en un seul dict {keyword: folder}
+        # Aplatir toutes les catégories en un seul dict {keyword_normalise: folder}
         flat = {}
         for category, entries in data.items():
             if category == "_notice":
                 continue
             if isinstance(entries, dict):
                 for kw, folder in entries.items():
-                    flat[kw.lower()] = folder
+                    flat[normalize(kw)] = folder
         return flat
     except Exception as e:
         print(f"[WARN] Impossible de charger keywords.json : {e}")
@@ -66,16 +75,16 @@ class Classifier:
         """
         # Utiliser uniquement la première page pour la classification
         analysis_text = self.extract_first_page_text(text) if first_page_only else text
-        text_lower = analysis_text.lower()
+        text_norm = normalize(analysis_text)  # texte normalisé (sans accents, minuscules)
 
         scores = {}
 
         # 1. Mappages utilisateur (priorité maximale, score x10)
         user_mappings = self.db.get_all_mappings()
         for mapping in user_mappings:
-            kw = mapping["keyword"].lower()
-            if kw in text_lower:
-                count = text_lower.count(kw)
+            kw = normalize(mapping["keyword"])
+            if kw in text_norm:
+                count = text_norm.count(kw)
                 scores[kw] = {
                     "keyword": kw,
                     "folder": mapping["target_folder"],
@@ -90,8 +99,8 @@ class Classifier:
                             key=lambda x: len(x[0]), reverse=True)
 
         for kw, folder in sorted_kws:
-            if kw not in scores and kw in text_lower:
-                count = text_lower.count(kw)
+            if kw not in scores and kw in text_norm:
+                count = text_norm.count(kw)
                 scores[kw] = {
                     "keyword": kw,
                     "folder": folder,
@@ -152,10 +161,10 @@ class Classifier:
             with open(TYPES_FILE, encoding="utf-8") as f:
                 data = json.load(f)
             detection = data.get("detection_keywords", {})
-            first_page = self.extract_first_page_text(text).lower()
+            first_page = normalize(self.extract_first_page_text(text))
             for doc_type, keywords in detection.items():
                 for kw in keywords:
-                    if kw.lower() in first_page:
+                    if normalize(kw) in first_page:
                         return doc_type
         except Exception:
             pass
