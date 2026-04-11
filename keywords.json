@@ -1,0 +1,135 @@
+{
+  "_notice": "Fichier de mots-clés GED-Manager. Vous pouvez ajouter, modifier ou supprimer des entrées. Format : 'mot-clé détecté' : 'Dossier/SousDossier'",
+
+  "Énergie": {
+    "engie": "Energie/Engie",
+    "edf electricite": "Energie/EDF",
+    "electricite de france": "Energie/EDF",
+    "eni gaz et electricite": "Energie/ENI",
+    "direct energie": "Energie/DirectEnergie",
+    "total energies": "Energie/TotalEnergie",
+    "total direct energie": "Energie/TotalEnergie",
+    "gaz de france": "Energie/GDF",
+    "gdf suez": "Energie/Engie"
+  },
+
+  "Eau": {
+    "saur": "Eau/SAUR",
+    "veolia eau": "Eau/Veolia",
+    "suez eau": "Eau/Suez",
+    "eau du robinet": "Eau/Divers"
+  },
+
+  "Télécoms": {
+    "orange france": "Telecom/Orange",
+    "facture orange": "Telecom/Orange",
+    "espace client orange": "Telecom/Orange",
+    "sfr business": "Telecom/SFR",
+    "facture sfr": "Telecom/SFR",
+    "espace client sfr": "Telecom/SFR",
+    "bouygues telecom": "Telecom/Bouygues",
+    "facture bouygues": "Telecom/Bouygues",
+    "free mobile": "Telecom/Free",
+    "free haut debit": "Telecom/Free",
+    "iliad": "Telecom/Free",
+    "la poste mobile": "Telecom/LaPosteMobile",
+    "sosh": "Telecom/Sosh"
+  },
+
+  "Banque": {
+    "credit agricole": "Banque/CreditAgricole",
+    "bnp paribas": "Banque/BNP",
+    "societe generale": "Banque/SocieteGenerale",
+    "caisse d'epargne": "Banque/CaisseEpargne",
+    "banque postale": "Banque/BanquePostale",
+    "credit mutuel": "Banque/CreditMutuel",
+    "boursorama banque": "Banque/Boursorama",
+    "hello bank": "Banque/HelloBank",
+    "ing direct": "Banque/ING",
+    "lcl banque": "Banque/LCL",
+    "relevé de compte": "Banque/Releves",
+    "avis de prelevement": "Banque/Divers"
+  },
+
+  "Assurance": {
+    "maif assurances": "Assurance/MAIF",
+    "macif": "Assurance/MACIF",
+    "matmut": "Assurance/MATMUT",
+    "axa assurances": "Assurance/AXA",
+    "allianz": "Assurance/Allianz",
+    "groupama": "Assurance/Groupama",
+    "mma assurances": "Assurance/MMA",
+    "maaf assurances": "Assurance/MAAF",
+    "generali": "Assurance/Generali",
+    "covea": "Assurance/Covea",
+    "attestation assurance": "Assurance/Divers"
+  },
+
+  "Automobile": {
+    "citroen": "Automobile/Citroen",
+    "automobiles citroen": "Automobile/Citroen",
+    "renault": "Automobile/Renault",
+    "peugeot": "Automobile/Peugeot",
+    "volkswagen": "Automobile/Volkswagen",
+    "toyota": "Automobile/Toyota",
+    "controle technique": "Automobile/ControleTechnique",
+    "dekra": "Automobile/ControleTechnique",
+    "autovision": "Automobile/ControleTechnique",
+    "securitest": "Automobile/ControleTechnique",
+    "carglass": "Automobile/Carglass",
+    "norauto": "Automobile/Norauto",
+    "feu vert": "Automobile/FeuVert",
+    "midas": "Automobile/Midas",
+    "carte grise": "Automobile/CartesGrises",
+    "certificat d immatriculation": "Automobile/CartesGrises"
+  },
+
+  "Santé": {
+    "caisse primaire d assurance maladie": "Sante/CPAM",
+    "cpam": "Sante/CPAM",
+    "ameli.fr": "Sante/CPAM",
+    "securite sociale": "Sante/SecuriteSociale",
+    "mgen": "Sante/MGEN",
+    "harmonie mutuelle": "Sante/HarmonieMutuelle",
+    "malakoff humanis": "Sante/MalakoffHumanis",
+    "alan assurance": "Sante/Alan",
+    "feuille de soins": "Sante/Divers",
+    "remboursement de soins": "Sante/Divers"
+  },
+
+  "Administration": {
+    "direction generale des finances publiques": "Admin/Impots",
+    "impots.gouv.fr": "Admin/Impots",
+    "tresor public": "Admin/Impots",
+    "avis d imposition": "Admin/Impots",
+    "taxe fonciere": "Admin/Impots",
+    "taxe d habitation": "Admin/Impots",
+    "prefecture": "Admin/Prefecture",
+    "sous-prefecture": "Admin/Prefecture",
+    "caisse d allocations familiales": "Admin/CAF",
+    "caf.fr": "Admin/CAF",
+    "france travail": "Admin/FranceTravail",
+    "pole emploi": "Admin/PoleEmploi",
+    "urssaf": "Admin/URSSAF"
+  },
+
+  "Logement": {
+    "contrat de bail": "Logement/Bail",
+    "quittance de loyer": "Logement/Loyer",
+    "syndic de copropriete": "Logement/Syndic",
+    "charges de copropriete": "Logement/Syndic",
+    "office notarial": "Logement/Notaire",
+    "acte de vente": "Logement/Notaire"
+  },
+
+  "Achats": {
+    "amazon.fr": "Achats/Amazon",
+    "amazon eu": "Achats/Amazon",
+    "ebay": "Achats/Ebay",
+    "fnac": "Achats/Fnac",
+    "darty": "Achats/Darty",
+    "leroy merlin": "Achats/LeroyMerlin",
+    "ikea": "Achats/IKEA",
+    "cdiscount": "Achats/Cdiscount"
+  }
+}

@@ -1,124 +1,75 @@
 """
 core/classifier.py
-Classification des documents par détection de mots-clés et d'origines.
-Utilise les mappages enregistrés + une liste de mots-clés par défaut.
+Classification des documents par détection de mots-clés.
+- Analyse uniquement la PREMIÈRE PAGE pour la classification
+- Mots-clés chargés depuis keywords.json (éditable par l'utilisateur)
+- Mots-clés utilisateur (mappages DB) prioritaires
 """
 
 import re
+import json
+import os
 from db.database import Database
 
+KEYWORDS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "keywords.json")
 
-# Mots-clés de référence par catégorie (exemples de départ, extensibles)
-DEFAULT_KEYWORDS = {
-    # Énergie / Utilities
-    "engie": "Energie/Engie",
-    "edf": "Energie/EDF",
-    "eni gaz": "Energie/ENI",
-    "direct energie": "Energie/DirectEnergie",
-    "total energies": "Energie/TotalEnergies",
-    "gaz de france": "Energie/GDF",
-    "saur": "Eau/SAUR",
-    "veolia eau": "Eau/Veolia",
-    "suez": "Eau/Suez",
 
-    # Télécoms
-    "orange": "Telecom/Orange",
-    "sfr": "Telecom/SFR",
-    "bouygues telecom": "Telecom/Bouygues",
-    "free": "Telecom/Free",
-    "la poste mobile": "Telecom/LaPosteMobile",
-    "sosh": "Telecom/Sosh",
-
-    # Banque
-    "credit agricole": "Banque/CreditAgricole",
-    "bnp paribas": "Banque/BNP",
-    "bnp": "Banque/BNP",
-    "societe generale": "Banque/SocieteGenerale",
-    "lcl": "Banque/LCL",
-    "caisse d'epargne": "Banque/CaisseEpargne",
-    "banque postale": "Banque/BanquePostale",
-    "credit mutuel": "Banque/CreditMutuel",
-    "boursorama": "Banque/Boursorama",
-    "hello bank": "Banque/HelloBank",
-    "ing": "Banque/ING",
-
-    # Assurance
-    "maif": "Assurance/MAIF",
-    "macif": "Assurance/MACIF",
-    "matmut": "Assurance/MATMUT",
-    "axa": "Assurance/AXA",
-    "allianz": "Assurance/Allianz",
-    "groupama": "Assurance/Groupama",
-    "covea": "Assurance/Covea",
-    "generali": "Assurance/Generali",
-    "mma": "Assurance/MMA",
-    "maaf": "Assurance/MAAF",
-
-    # Automobile
-    "citroen": "Automobile/Citroen",
-    "renault": "Automobile/Renault",
-    "peugeot": "Automobile/Peugeot",
-    "volkswagen": "Automobile/Volkswagen",
-    "toyota": "Automobile/Toyota",
-    "controle technique": "Automobile/ControleTechnique",
-    "dekra": "Automobile/ControleTechnique",
-    "autovision": "Automobile/ControleTechnique",
-    "carglass": "Automobile/Carglass",
-    "norauto": "Automobile/Norauto",
-    "feu vert": "Automobile/FeuVert",
-    "midas": "Automobile/Midas",
-
-    # Santé
-    "cpam": "Sante/CPAM",
-    "ameli": "Sante/CPAM",
-    "secu": "Sante/SecuriteSociale",
-    "mutuelle": "Sante/Mutuelle",
-    "mgen": "Sante/MGEN",
-    "harmonie mutuelle": "Sante/HarmonieMutuelle",
-    "alan": "Sante/Alan",
-    "malakoff": "Sante/MalakoffHumanis",
-
-    # Impôts / Admin
-    "direction generale des finances": "Admin/Impots",
-    "impots.gouv": "Admin/Impots",
-    "tresor public": "Admin/Impots",
-    "prefecture": "Admin/Prefecture",
-    "caf": "Admin/CAF",
-    "pole emploi": "Admin/PoleEmploi",
-    "france travail": "Admin/FranceTravail",
-    "urssaf": "Admin/URSSAF",
-    "rsi": "Admin/RSI",
-
-    # Logement
-    "edf habitation": "Logement/EDF",
-    "appartement": "Logement/Divers",
-    "bail": "Logement/Bail",
-    "syndic": "Logement/Syndic",
-    "notaire": "Logement/Notaire",
-
-    # Grande distribution / Divers
-    "amazon": "Achats/Amazon",
-    "ebay": "Achats/Ebay",
-    "fnac": "Achats/Fnac",
-    "darty": "Achats/Darty",
-    "leroy merlin": "Achats/LeroyMerlin",
-}
+def load_keywords() -> dict:
+    """Charge les mots-clés depuis keywords.json"""
+    if not os.path.exists(KEYWORDS_FILE):
+        return {}
+    try:
+        with open(KEYWORDS_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        # Aplatir toutes les catégories en un seul dict {keyword: folder}
+        flat = {}
+        for category, entries in data.items():
+            if category == "_notice":
+                continue
+            if isinstance(entries, dict):
+                for kw, folder in entries.items():
+                    flat[kw.lower()] = folder
+        return flat
+    except Exception as e:
+        print(f"[WARN] Impossible de charger keywords.json : {e}")
+        return {}
 
 
 class Classifier:
     def __init__(self, db: Database):
         self.db = db
+        self.default_keywords = load_keywords()
 
-    def classify(self, text: str) -> list[dict]:
+    def reload_keywords(self):
+        """Recharger keywords.json (utile après modification par l'utilisateur)"""
+        self.default_keywords = load_keywords()
+
+    def extract_first_page_text(self, full_text: str) -> str:
         """
-        Analyse le texte et retourne une liste de correspondances triées
-        par score décroissant.
+        Extrait le texte de la première page uniquement.
+        Les pages sont séparées par un saut de page (\\f) ou
+        on prend les 3000 premiers caractères si pas de séparateur.
+        """
+        if "\f" in full_text:
+            return full_text.split("\f")[0]
+        # Fallback : prendre les 3000 premiers caractères (~1 page)
+        return full_text[:3000]
+
+    def classify(self, text: str, first_page_only: bool = True) -> list[dict]:
+        """
+        Analyse le texte et retourne une liste de correspondances
+        triées par score décroissant.
         Chaque entrée : {'keyword': ..., 'folder': ..., 'score': ...}
+
+        first_page_only=True : classification sur la 1ère page uniquement
         """
-        text_lower = text.lower()
+        # Utiliser uniquement la première page pour la classification
+        analysis_text = self.extract_first_page_text(text) if first_page_only else text
+        text_lower = analysis_text.lower()
+
         scores = {}
 
-        # 1. Chercher dans les mappages utilisateur (priorité maximale)
+        # 1. Mappages utilisateur (priorité maximale, score x10)
         user_mappings = self.db.get_all_mappings()
         for mapping in user_mappings:
             kw = mapping["keyword"].lower()
@@ -127,21 +78,25 @@ class Classifier:
                 scores[kw] = {
                     "keyword": kw,
                     "folder": mapping["target_folder"],
-                    "score": count * 10,  # priorité haute
+                    "score": count * 10,
                     "source": "user",
                 }
 
-        # 2. Chercher dans les mots-clés par défaut
-        for kw, folder in DEFAULT_KEYWORDS.items():
-            if kw.lower() in text_lower:
-                if kw not in scores:
-                    count = text_lower.count(kw.lower())
-                    scores[kw] = {
-                        "keyword": kw,
-                        "folder": folder,
-                        "score": count * 5,
-                        "source": "default",
-                    }
+        # 2. Mots-clés par défaut (keywords.json, score x5)
+        # Trier par longueur décroissante : les mots-clés les plus longs
+        # sont plus spécifiques et doivent être testés en premier
+        sorted_kws = sorted(self.default_keywords.items(),
+                            key=lambda x: len(x[0]), reverse=True)
+
+        for kw, folder in sorted_kws:
+            if kw not in scores and kw in text_lower:
+                count = text_lower.count(kw)
+                scores[kw] = {
+                    "keyword": kw,
+                    "folder": folder,
+                    "score": count * 5,
+                    "source": "default",
+                }
 
         # Trier par score décroissant
         results = sorted(scores.values(), key=lambda x: x["score"], reverse=True)
@@ -156,6 +111,7 @@ class Classifier:
         """
         Extraire des métadonnées simples du texte :
         dates, montants, numéros de documents
+        (appliqué sur le texte complet, pas seulement la 1ère page)
         """
         meta = {}
 
@@ -164,7 +120,7 @@ class Classifier:
             r'\b(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4})\b', text
         )
         if dates:
-            meta["dates"] = dates[:5]  # max 5
+            meta["dates"] = dates[:5]
 
         # Montants (€)
         montants = re.findall(

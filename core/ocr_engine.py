@@ -1,11 +1,12 @@
 """
 core/ocr_engine.py
-Moteur OCR : extraction de texte depuis PDF ou image
-Utilise Tesseract via pytesseract + pdf2image pour les PDF scannés
+Moteur OCR : extraction de texte depuis PDF ou image.
+- Résolution 3x (~216 DPI) pour meilleure qualité
+- Retourne le texte complet (toutes pages) pour les métadonnées
+- Le classifier se charge de n'utiliser que la 1ère page pour classer
 """
 
 import os
-import sys
 import pytesseract
 from PIL import Image
 import fitz  # PyMuPDF
@@ -22,6 +23,8 @@ class OCREngine:
         Extrait le texte d'un PDF.
         Tente d'abord l'extraction native (PDF texte),
         puis bascule sur OCR si le texte est vide/insuffisant.
+        Les pages sont séparées par \\f pour permettre l'extraction
+        de la première page uniquement par le classifier.
         """
         text = self._extract_native(pdf_path)
         if len(text.strip()) > 50:
@@ -33,29 +36,34 @@ class OCREngine:
         """Extraire le texte natif du PDF (PDF texte, non image)"""
         try:
             doc = fitz.open(pdf_path)
-            full_text = ""
+            pages = []
             for page in doc:
-                full_text += page.get_text()
+                pages.append(page.get_text())
             doc.close()
-            return full_text
-        except Exception as e:
+            # Séparer les pages par \f (form feed) pour extraction 1ère page
+            return "\f".join(pages)
+        except Exception:
             return ""
 
     def _extract_ocr(self, pdf_path):
-        """Extraire le texte via OCR (PDF image / scanné)"""
+        """
+        Extraire le texte via OCR (PDF image / scanné).
+        Résolution 3x (~216 DPI) pour meilleure qualité de reconnaissance.
+        """
         try:
             doc = fitz.open(pdf_path)
-            full_text = ""
+            pages = []
             for page_num in range(len(doc)):
                 page = doc[page_num]
-                # Rendre la page en image haute résolution
-                mat = fitz.Matrix(2.0, 2.0)  # 2x = ~144 DPI
+                # 3x = ~216 DPI — meilleure qualité, légèrement plus lent
+                mat = fitz.Matrix(3.0, 3.0)
                 pix = page.get_pixmap(matrix=mat)
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 text = pytesseract.image_to_string(img, lang=self.language)
-                full_text += text + "\n"
+                pages.append(text)
             doc.close()
-            return full_text
+            # Séparer les pages par \f pour extraction 1ère page
+            return "\f".join(pages)
         except Exception as e:
             return f"[ERREUR OCR] {str(e)}"
 
