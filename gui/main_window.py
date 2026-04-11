@@ -616,19 +616,18 @@ class GEDManagerApp:
                 sg.Input("Personnalise", key="-NCAT-", size=(20, 1)),
             ],
             [sg.HorizontalSeparator()],
-            [sg.HorizontalSeparator()],
-            [sg.Text("Types de documents (liste de renommage) :", font=FONT_MAIN)],
-            [sg.Text("Ajouter :", size=(8,1)),
-             sg.Input(key="-NEWTYPE-", size=(20,1)),
-             sg.Button("Ajouter type", key="-ADDTYPE-"),
-             sg.Button("Supprimer type selectionne", key="-DELTYPE-")],
-            [sg.Listbox(values=[], key="-TYPELIST-", size=(40, 4), enable_events=True)],
-            [sg.HorizontalSeparator()],
             [
                 sg.Button("Ajouter", key="-KADD-"),
                 sg.Button("Supprimer selection", key="-KDEL-"),
                 sg.Button("Fermer", key="-KCLOSE-"),
             ],
+            [sg.HorizontalSeparator()],
+            [sg.Text("Types de documents (liste de renommage) :", font=FONT_MAIN)],
+            [sg.Listbox(values=[], key="-TYPELIST-", size=(40, 4), enable_events=True)],
+            [sg.Text("Ajouter :", size=(8,1)),
+             sg.Input(key="-NEWTYPE-", size=(20,1)),
+             sg.Button("Ajouter type", key="-ADDTYPE-"),
+             sg.Button("Supprimer type", key="-DELTYPE-")],
         ]
 
         win = sg.Window("Mots-cles", layout, modal=True, finalize=True)
