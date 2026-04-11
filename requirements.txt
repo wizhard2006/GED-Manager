@@ -1,7 +1,5 @@
 PySimpleGUI==4.60.5
 pytesseract==0.3.10
-Pillow==10.1.0
-pdf2image==1.16.3
-PyMuPDF==1.23.8
-python-magic-bin==0.4.14
-sqlite3-python==1.0.0
+Pillow==10.4.0
+PyMuPDF==1.24.5
+pywin32==306
