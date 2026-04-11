@@ -1,0 +1,36 @@
+{
+  "_notice": "Liste des types de documents proposés lors du renommage. Ajoutez ou supprimez des entrées via l'interface (fenêtre Mots-clés > onglet Types) ou directement ici.",
+  "types": [
+    "Facture",
+    "Contrat",
+    "Courrier",
+    "Releve",
+    "Attestation",
+    "Devis",
+    "Rapport",
+    "Avis",
+    "Bulletin",
+    "Quittance",
+    "Certificat",
+    "Convention",
+    "Avenant",
+    "Ticket",
+    "Autre"
+  ],
+  "detection_keywords": {
+    "Facture":      ["facture", "invoice", "avoir", "note de frais", "bon de commande"],
+    "Contrat":      ["contrat", "convention", "accord", "engagement"],
+    "Courrier":     ["courrier", "lettre", "correspondance", "objet :"],
+    "Releve":       ["releve", "relevé de compte", "extrait de compte", "historique"],
+    "Attestation":  ["attestation", "certifie", "certifié", "justificatif"],
+    "Devis":        ["devis", "estimation", "proposition commerciale"],
+    "Rapport":      ["rapport", "compte rendu", "bilan"],
+    "Avis":         ["avis d'imposition", "avis de prelevement", "avis de passage"],
+    "Bulletin":     ["bulletin", "bulletin de salaire", "bulletin de paie", "fiche de paie"],
+    "Quittance":    ["quittance", "recu", "reçu", "paiement recu"],
+    "Certificat":   ["certificat", "carte grise", "certificat d'immatriculation"],
+    "Convention":   ["convention", "accord collectif"],
+    "Avenant":      ["avenant"],
+    "Ticket":       ["ticket", "recu de caisse"]
+  }
+}

@@ -12,7 +12,7 @@ from utils.config import Config
 from utils.logger import Logger
 from db.database import Database
 from core.ocr_engine import OCREngine
-from core.classifier import Classifier
+from core.classifier import Classifier, TYPES_FILE
 from core.file_manager import FileManager
 from core.mapper import Mapper
 from scanner.scanner_interface import ScannerInterface
@@ -218,11 +218,15 @@ class GEDManagerApp:
                 title="Classification automatique",
             )
             if rep == "Yes":
+                final_path = self._propose_rename(file_path, matched_kw, text)
+                if final_path is None:
+                    self._log("Classement annule.")
+                    return
                 dest = self.file_manager.move_file(
-                    file_path, known_folder, matched_kw, detected_kws
+                    final_path, known_folder, matched_kw, detected_kws
                 )
-                self._log(f"✅ Déplacé vers : {dest}")
-                sg.popup(f"Document classé !\n\n→ {dest}", title="Succès")
+                self._log(f"Deplace vers : {dest}")
+                sg.popup(f"Document classe !\n\n-> {dest}", title="Succes")
                 return
             else:
                 # L'utilisateur veut choisir manuellement
@@ -298,14 +302,111 @@ class GEDManagerApp:
                 if kw and vals["-LEARN-"]:
                     self.mapper.learn(kw, folder)
                     self._log(f"🔖 Mappage enregistré : '{kw}' → '{folder}'")
+                # Proposer renommage avant deplacement
+                final_path = self._propose_rename(file_path, kw or folder.split("/")[-1], text)
+                if final_path is None:
+                    self._log("Classement annule.")
+                    return
                 dest = self.file_manager.move_file(
-                    file_path, folder, kw, detected_kws
+                    final_path, folder, kw, detected_kws
                 )
-                self._log(f"✅ Classé dans : {dest}")
-                sg.popup(f"Document classé !\n\n→ {dest}", title="Succès")
+                self._log(f"Classe dans : {dest}")
+                sg.popup(f"Document classe !\n\n-> {dest}", title="Succes")
                 return
 
     # ── RECHERCHE ──────────────────────────────────────────────────────────
+
+
+    def _propose_rename(self, file_path: str, societe: str, text: str) -> str:
+        """
+        Fenetre de renommage propose avant deplacement.
+        Retourne le nouveau chemin (renomme dans le meme dossier source)
+        ou le chemin original si annule.
+        """
+        import json
+        from datetime import date
+
+        # Charger la liste des types
+        types_list = ["Facture", "Contrat", "Courrier", "Releve", "Attestation",
+                      "Devis", "Rapport", "Avis", "Bulletin", "Quittance",
+                      "Certificat", "Convention", "Avenant", "Ticket", "Autre"]
+        if os.path.exists(TYPES_FILE):
+            try:
+                with open(TYPES_FILE, encoding="utf-8") as f:
+                    data = json.load(f)
+                types_list = data.get("types", types_list)
+            except Exception:
+                pass
+
+        # Detecter le type automatiquement
+        detected_type = self.classifier.detect_type(text)
+        default_idx = types_list.index(detected_type) if detected_type in types_list else 0
+
+        # Date du jour par defaut
+        today = date.today().strftime("%Y-%m-%d")
+
+        # Nom propose
+        ext = os.path.splitext(file_path)[1]
+        proposed_name = f"{societe.capitalize()}_{detected_type}_{today}{ext}"
+
+        layout = [
+            [sg.Text("Renommer le document", font=FONT_TITLE)],
+            [sg.Text("Nom original :"), sg.Text(os.path.basename(file_path), font=FONT_MONO)],
+            [sg.HorizontalSeparator()],
+            [sg.Text("Societe / Origine :", size=(18, 1)),
+             sg.Input(societe.capitalize(), key="-SOC-", size=(25, 1))],
+            [sg.Text("Type de document :", size=(18, 1)),
+             sg.Combo(types_list, default_value=detected_type,
+                      key="-TYPE-", size=(23, 1), readonly=True)],
+            [sg.Text("Date (AAAA-MM-JJ) :", size=(18, 1)),
+             sg.Input(today, key="-DATE-", size=(15, 1))],
+            [sg.HorizontalSeparator()],
+            [sg.Text("Nom final :"), sg.Text(proposed_name, key="-PREVIEW-",
+                                              font=FONT_MONO, size=(45, 1))],
+            [sg.HorizontalSeparator()],
+            [
+                sg.Button("Renommer et classer", key="-OK-"),
+                sg.Button("Garder nom original", key="-KEEP-"),
+                sg.Button("Annuler", key="-CANCEL-"),
+            ],
+        ]
+
+        win = sg.Window("Renommage", layout, modal=True, finalize=True)
+
+        def update_preview(vals):
+            soc = vals["-SOC-"].strip().replace(" ", "_") or "Document"
+            typ = vals["-TYPE-"] or "Autre"
+            dat = vals["-DATE-"].strip() or today
+            preview = f"{soc}_{typ}_{dat}{ext}"
+            win["-PREVIEW-"].update(preview)
+            return preview
+
+        current_preview = proposed_name
+
+        while True:
+            ev, vals = win.read()
+            if ev in (sg.WIN_CLOSED, "-CANCEL-"):
+                win.close()
+                return None  # Annulation complete
+            elif ev in ("-SOC-", "-TYPE-", "-DATE-"):
+                current_preview = update_preview(vals)
+            elif ev == "-KEEP-":
+                win.close()
+                return file_path  # Garder nom original
+            elif ev == "-OK-":
+                current_preview = update_preview(vals)
+                new_name = current_preview
+                new_path = os.path.join(os.path.dirname(file_path), new_name)
+                try:
+                    os.rename(file_path, new_path)
+                    self._log(f"Renomme : {os.path.basename(file_path)} -> {new_name}")
+                    win.close()
+                    return new_path
+                except Exception as e:
+                    sg.popup_error(f"Erreur lors du renommage :\n{e}")
+
+        win.close()
+        return file_path
 
     def _action_recherche(self):
         query = sg.popup_get_text(
@@ -440,7 +541,7 @@ class GEDManagerApp:
     def _action_keywords(self):
         """Fenetre de gestion des mots-cles (keywords.json)"""
         import json
-        from core.classifier import KEYWORDS_FILE
+        from core.classifier import KEYWORDS_FILE, TYPES_FILE
 
         def load_flat():
             if not os.path.exists(KEYWORDS_FILE):
@@ -515,6 +616,14 @@ class GEDManagerApp:
                 sg.Input("Personnalise", key="-NCAT-", size=(20, 1)),
             ],
             [sg.HorizontalSeparator()],
+            [sg.HorizontalSeparator()],
+            [sg.Text("Types de documents (liste de renommage) :", font=FONT_MAIN)],
+            [sg.Text("Ajouter :", size=(8,1)),
+             sg.Input(key="-NEWTYPE-", size=(20,1)),
+             sg.Button("Ajouter type", key="-ADDTYPE-"),
+             sg.Button("Supprimer type selectionne", key="-DELTYPE-")],
+            [sg.Listbox(values=[], key="-TYPELIST-", size=(40, 4), enable_events=True)],
+            [sg.HorizontalSeparator()],
             [
                 sg.Button("Ajouter", key="-KADD-"),
                 sg.Button("Supprimer selection", key="-KDEL-"),
@@ -523,6 +632,27 @@ class GEDManagerApp:
         ]
 
         win = sg.Window("Mots-cles", layout, modal=True, finalize=True)
+
+        # Charger la liste des types dans la listbox
+        def load_types():
+            if not os.path.exists(TYPES_FILE):
+                return []
+            with open(TYPES_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("types", [])
+
+        def save_types(types_list):
+            if not os.path.exists(TYPES_FILE):
+                data = {}
+            else:
+                with open(TYPES_FILE, encoding="utf-8") as f:
+                    data = json.load(f)
+            data["types"] = types_list
+            with open(TYPES_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+        current_types = load_types()
+        win["-TYPELIST-"].update(values=current_types)
 
         while True:
             ev, vals = win.read()
@@ -560,6 +690,20 @@ class GEDManagerApp:
                     rows = [[k2, f2, c2] for k2, f2, c2 in flat]
                     win["-KTABLE-"].update(values=rows)
                     self._log(f"Mot-cle supprime : '{kw_del}'")
+            elif ev == "-ADDTYPE-":
+                new_type = vals["-NEWTYPE-"].strip()
+                if new_type and new_type not in current_types:
+                    current_types.append(new_type)
+                    save_types(current_types)
+                    win["-TYPELIST-"].update(values=current_types)
+                    win["-NEWTYPE-"].update("")
+                    self._log(f"Type ajoute : '{new_type}'")
+            elif ev == "-DELTYPE-" and vals["-TYPELIST-"]:
+                type_del = vals["-TYPELIST-"][0]
+                current_types.remove(type_del)
+                save_types(current_types)
+                win["-TYPELIST-"].update(values=current_types)
+                self._log(f"Type supprime : '{type_del}'")
 
         win.close()
 

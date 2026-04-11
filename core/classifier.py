@@ -12,6 +12,7 @@ import os
 from db.database import Database
 
 KEYWORDS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "keywords.json")
+TYPES_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "document_types.json")
 
 
 def load_keywords() -> dict:
@@ -138,3 +139,25 @@ class Classifier:
             meta["numeros"] = numeros[:3]
 
         return meta
+
+    def detect_type(self, text: str) -> str:
+        """
+        Detecte le type de document (Facture, Contrat, Releve, etc.)
+        a partir des mots-cles de detection_keywords dans document_types.json.
+        Retourne le type detecte ou "Autre" par defaut.
+        """
+        if not os.path.exists(TYPES_FILE):
+            return "Autre"
+        try:
+            with open(TYPES_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            detection = data.get("detection_keywords", {})
+            first_page = self.extract_first_page_text(text).lower()
+            for doc_type, keywords in detection.items():
+                for kw in keywords:
+                    if kw.lower() in first_page:
+                        return doc_type
+        except Exception:
+            pass
+        return "Autre"
+
