@@ -72,6 +72,10 @@ class GEDManagerApp:
                 sg.Button("⚙️  Paramètres", key="-PARAMS-",
                           size=(22, 2), font=FONT_MAIN),
             ],
+            [
+                sg.Button("🔑  Mots-clés", key="-KEYWORDS-",
+                          size=(22, 2), font=FONT_MAIN),
+            ],
             [sg.HorizontalSeparator()],
             [sg.Multiline("Prêt.\n", key="-LOG-", size=(58, 8),
                           font=FONT_MONO, disabled=True, autoscroll=True)],
@@ -102,6 +106,8 @@ class GEDManagerApp:
                 self._action_mappages()
             elif event == "-PARAMS-":
                 self._action_params()
+            elif event == "-KEYWORDS-":
+                self._action_keywords()
             elif event == "-SCAN-DONE-":
                 # Résultat du scan asynchrone
                 result = values["-SCAN-DONE-"]
@@ -427,6 +433,135 @@ class GEDManagerApp:
         win.close()
 
     # ── PARAMÈTRES ─────────────────────────────────────────────────────────
+
+
+    # -- MOTS-CLES -----------------------------------------------------------
+
+    def _action_keywords(self):
+        """Fenetre de gestion des mots-cles (keywords.json)"""
+        import json
+        from core.classifier import KEYWORDS_FILE
+
+        def load_flat():
+            if not os.path.exists(KEYWORDS_FILE):
+                return []
+            with open(KEYWORDS_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            flat = []
+            for cat, entries in data.items():
+                if cat == "_notice":
+                    continue
+                if isinstance(entries, dict):
+                    for kw, folder in entries.items():
+                        flat.append((kw, folder, cat))
+            return sorted(flat, key=lambda x: x[2] + x[0])
+
+        def save_entry(keyword, folder, category="Personnalise"):
+            if not os.path.exists(KEYWORDS_FILE):
+                data = {}
+            else:
+                with open(KEYWORDS_FILE, encoding="utf-8") as f:
+                    data = json.load(f)
+            if category not in data:
+                data[category] = {}
+            data[category][keyword.lower().strip()] = folder.strip()
+            with open(KEYWORDS_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+        def delete_entry(keyword, category):
+            if not os.path.exists(KEYWORDS_FILE):
+                return
+            with open(KEYWORDS_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            if category in data and keyword.lower() in data[category]:
+                del data[category][keyword.lower()]
+            with open(KEYWORDS_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+        flat = load_flat()
+        rows = [[kw, folder, cat] for kw, folder, cat in flat]
+
+        layout = [
+            [sg.Text("Mots-cles de classification", font=FONT_TITLE)],
+            [sg.Text(
+                "Recherches dans la 1ere page du document pour detecter l'origine.",
+                font=FONT_MAIN
+            )],
+            [sg.Table(
+                values=rows if rows else [["--", "--", "--"]],
+                headings=["Mot-cle", "Dossier cible", "Categorie"],
+                col_widths=[25, 28, 15],
+                auto_size_columns=False,
+                num_rows=min(15, max(6, len(rows))),
+                key="-KTABLE-",
+                justification="left",
+                enable_events=True,
+            )],
+            [sg.HorizontalSeparator()],
+            [sg.Text("Ajouter un mot-cle :", font=FONT_MAIN)],
+            [
+                sg.Text("Mot-cle :", size=(13, 1)),
+                sg.Input(key="-NKW-", size=(25, 1)),
+            ],
+            [
+                sg.Text("Dossier cible :", size=(13, 1)),
+                sg.Input(key="-NFOLDER-", size=(25, 1)),
+                sg.FolderBrowse("Parcourir",
+                                initial_folder=self.config.ged_root,
+                                target="-NFOLDER-"),
+            ],
+            [
+                sg.Text("Categorie :", size=(13, 1)),
+                sg.Input("Personnalise", key="-NCAT-", size=(20, 1)),
+            ],
+            [sg.HorizontalSeparator()],
+            [
+                sg.Button("Ajouter", key="-KADD-"),
+                sg.Button("Supprimer selection", key="-KDEL-"),
+                sg.Button("Fermer", key="-KCLOSE-"),
+            ],
+        ]
+
+        win = sg.Window("Mots-cles", layout, modal=True, finalize=True)
+
+        while True:
+            ev, vals = win.read()
+            if ev in (sg.WIN_CLOSED, "-KCLOSE-"):
+                self.classifier.reload_keywords()
+                self._log("Mots-cles recharges.")
+                break
+            elif ev == "-KADD-":
+                kw = vals["-NKW-"].strip()
+                folder = vals["-NFOLDER-"].strip()
+                cat = vals["-NCAT-"].strip() or "Personnalise"
+                if os.path.isabs(folder) and folder.startswith(self.config.ged_root):
+                    folder = os.path.relpath(folder, self.config.ged_root)
+                if not kw or not folder:
+                    sg.popup_error("Mot-cle et dossier cible sont obligatoires.")
+                    continue
+                save_entry(kw, folder, cat)
+                self._log(f"Mot-cle ajoute : '{kw}' -> '{folder}'")
+                flat = load_flat()
+                rows = [[k2, f2, c2] for k2, f2, c2 in flat]
+                win["-KTABLE-"].update(values=rows)
+                win["-NKW-"].update("")
+                win["-NFOLDER-"].update("")
+            elif ev == "-KDEL-" and vals["-KTABLE-"]:
+                idx = vals["-KTABLE-"][0]
+                kw_del = rows[idx][0]
+                cat_del = rows[idx][2]
+                rep = sg.popup_yes_no(
+                    f"Supprimer le mot-cle '{kw_del}' ?",
+                    title="Confirmation"
+                )
+                if rep == "Yes":
+                    delete_entry(kw_del, cat_del)
+                    flat = load_flat()
+                    rows = [[k2, f2, c2] for k2, f2, c2 in flat]
+                    win["-KTABLE-"].update(values=rows)
+                    self._log(f"Mot-cle supprime : '{kw_del}'")
+
+        win.close()
 
     def _action_params(self):
         layout = [
