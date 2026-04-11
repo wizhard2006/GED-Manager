@@ -366,7 +366,7 @@ class GEDManagerApp:
             [sg.HorizontalSeparator()],
             [
                 sg.Button("Renommer et classer", key="-OK-"),
-                sg.Button("Garder nom original", key="-KEEP-"),
+                sg.Button("Classer sans renommer", key="-KEEP-"),
                 sg.Button("Annuler", key="-CANCEL-"),
             ],
         ]
