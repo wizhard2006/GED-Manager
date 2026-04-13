@@ -32,6 +32,8 @@ class GEDManagerApp:
         self.ocr = OCREngine(
             tesseract_path=self.config.tesseract_path,
             language=self.config.ocr_language,
+            enhanced_preprocessing=self.config.enhanced_preprocessing,
+            tesseract_psm=self.config.tesseract_psm,
         )
         self.classifier = Classifier(self.db)
         self.mapper = Mapper(self.db)

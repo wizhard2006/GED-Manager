@@ -27,9 +27,17 @@ DEFAULTS = {
     },
     "classification": {
         # Seuil de confiance pour le mode hybride (0 = désactivé, validation toujours demandée)
-        # Quand > 0, les documents avec score >= seuil sont classés automatiquement
-        # sans demander de validation. Activer uniquement quand l'OCR est fiable.
         "auto_classify_threshold": "0",
+    },
+    "ocr": {
+        # PSM 6 = bloc de texte uniforme (mieux pour factures/courriers)
+        # Valeurs possibles : 3 (auto), 4 (colonne unique), 6 (bloc uniforme)
+        # Pour revenir à l'ancien comportement : mettre 3
+        "tesseract_psm": "6",
+        # Prétraitement OpenCV : débruitage + binarisation + deskew
+        # false = désactivé (comportement original garanti)
+        # true  = activé (tester sur quelques docs avant de valider)
+        "enhanced_preprocessing": "false",
     },
 }
 
@@ -91,6 +99,17 @@ class Config:
     @property
     def ocr_language(self):
         return self.get("app", "language")
+
+    @property
+    def tesseract_psm(self):
+        try:
+            return int(self.get("ocr", "tesseract_psm"))
+        except (ValueError, TypeError):
+            return 6
+
+    @property
+    def enhanced_preprocessing(self):
+        return self.get("ocr", "enhanced_preprocessing").lower() == "true"
 
     @property
     def auto_classify_threshold(self):
