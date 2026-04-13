@@ -1126,43 +1126,126 @@ class GEDManagerApp:
         win.close()
 
     def _action_params(self):
+
+        # --- Options PSM avec descriptions courtes ---
+        PSM_OPTIONS = [
+            "3  — Auto (détection complète)",
+            "4  — Colonne unique",
+            "6  — Bloc de texte uniforme (recommandé factures/courriers)",
+            "11 — Texte épars (formulaires, étiquettes)",
+            "12 — Texte épars + détection auto",
+        ]
+        PSM_HELP = (
+            "Modes de segmentation de page Tesseract (PSM)\n"
+            "═══════════════════════════════════════════════\n\n"
+            "  0  Détecte l'orientation uniquement, ne lit pas\n"
+            "  1  Auto + détection orientation\n"
+            "  2  Auto sans découpage de page\n"
+            "  3  Détection automatique complète  ← ancien défaut\n"
+            "  4  Colonne de texte unique, tailles variables\n"
+            "  5  Bloc vertical (texte vertical, japonais…)\n"
+            "  6  Bloc de texte uniforme  ← recommandé GED\n"
+            "  7  Ligne unique de texte\n"
+            "  8  Un seul mot\n"
+            "  9  Un seul mot dans un cercle\n"
+            " 10  Un seul caractère\n"
+            " 11  Texte épars, pas d'ordre  ← formulaires\n"
+            " 12  Texte épars + détection auto\n"
+            " 13  Ligne brute (ignore les heuristiques)\n\n"
+            "Conseil : commencer par PSM 6 pour les documents\n"
+            "courants, PSM 11 pour les formulaires administratifs."
+        )
+
+        # Trouver l'option courante dans la liste
+        current_psm = str(self.config.tesseract_psm)
+        default_psm_idx = 2  # PSM 6 par défaut
+        for i, opt in enumerate(PSM_OPTIONS):
+            if opt.startswith(current_psm + " ") or opt.startswith(current_psm + "  "):
+                default_psm_idx = i
+                break
+
         layout = [
             [sg.Text("Paramètres", font=FONT_TITLE)],
-            [sg.Text("Dossier racine GED (ex: D:\\)"),
+            [sg.HorizontalSeparator()],
+            # Chemins
+            [sg.Text("Dossier racine GED (ex: D:\\)", size=(30, 1)),
              sg.Input(self.config.ged_root, key="-ROOT-", size=(35, 1)),
              sg.FolderBrowse()],
-            [sg.Text("Dossier quarantaine"),
+            [sg.Text("Dossier quarantaine", size=(30, 1)),
              sg.Input(self.config.quarantine_folder, key="-QFOLDER-", size=(35, 1)),
              sg.FolderBrowse()],
-            [sg.Text("Chemin Tesseract OCR"),
+            [sg.Text("Chemin Tesseract OCR", size=(30, 1)),
              sg.Input(self.config.tesseract_path, key="-TESS-", size=(35, 1)),
              sg.FileBrowse()],
-            [sg.Text("Dossier sortie scanner"),
+            [sg.Text("Dossier sortie scanner", size=(30, 1)),
              sg.Input(self.config.scanner_output_folder, key="-SCANFOLDER-", size=(35, 1)),
              sg.FolderBrowse()],
-            [sg.Text("Langue OCR (ex: fra+eng)"),
+            [sg.Text("Langue OCR (ex: fra+eng)", size=(30, 1)),
              sg.Input(self.config.ocr_language, key="-LANG-", size=(15, 1))],
+            [sg.HorizontalSeparator()],
+            # Section OCR avancé
+            [sg.Text("Paramètres OCR avancés", font=FONT_TITLE)],
+            [
+                sg.Text("Mode segmentation Tesseract (PSM)", size=(30, 1)),
+                sg.Combo(
+                    PSM_OPTIONS,
+                    default_value=PSM_OPTIONS[default_psm_idx],
+                    key="-PSM-",
+                    size=(42, 1),
+                    readonly=True,
+                ),
+                sg.Button("?", key="-PSM-HELP-", size=(3, 1), tooltip="Aide sur les modes PSM"),
+            ],
+            [
+                sg.Text("Prétraitement OpenCV", size=(30, 1)),
+                sg.Checkbox(
+                    "Activer (débruitage + binarisation + deskew)",
+                    default=self.config.enhanced_preprocessing,
+                    key="-PREPROC-",
+                ),
+            ],
+            [sg.Text(
+                "⚠  Tester le prétraitement sur quelques documents avant de valider.",
+                font=("Helvetica", 9), text_color="orange"
+            )],
             [sg.HorizontalSeparator()],
             [sg.Button("Enregistrer", key="-SAVE-"),
              sg.Button("Annuler", key="-CANCEL-")],
         ]
+
         win = sg.Window("Paramètres", layout, modal=True)
 
         while True:
             ev, vals = win.read()
             if ev in (sg.WIN_CLOSED, "-CANCEL-"):
                 break
+            elif ev == "-PSM-HELP-":
+                sg.popup_scrolled(
+                    PSM_HELP,
+                    title="Aide — Modes PSM Tesseract",
+                    size=(55, 22),
+                    font=FONT_MONO,
+                )
             elif ev == "-SAVE-":
+                # Extraire le numéro PSM depuis la sélection
+                psm_str = vals["-PSM-"].split("—")[0].strip()
                 self.config.set("paths", "ged_root", vals["-ROOT-"])
                 self.config.set("paths", "quarantine_folder", vals["-QFOLDER-"])
                 self.config.set("paths", "tesseract_path", vals["-TESS-"])
                 self.config.set("paths", "scanner_output_folder", vals["-SCANFOLDER-"])
                 self.config.set("app", "language", vals["-LANG-"])
-                # Mettre à jour les instances
+                self.config.set("ocr", "tesseract_psm", psm_str)
+                self.config.set(
+                    "ocr", "enhanced_preprocessing",
+                    "true" if vals["-PREPROC-"] else "false"
+                )
+                # Mettre à jour les instances en mémoire
                 self.file_manager.ged_root = vals["-ROOT-"]
                 self.file_manager.quarantine_folder = vals["-QFOLDER-"]
                 self.scanner.output_folder = vals["-SCANFOLDER-"]
                 self.ocr.language = vals["-LANG-"]
+                self.ocr.tesseract_psm = int(psm_str)
+                self.ocr.enhanced_preprocessing = vals["-PREPROC-"]
                 sg.popup("Paramètres enregistrés.", title="Paramètres")
                 break
         win.close()
