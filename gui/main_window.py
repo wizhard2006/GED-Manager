@@ -1169,7 +1169,7 @@ v1.5 — Traitement en masse + règle sous-chemin
 
 v1.4.2 — Mots-clés véhicules
   + Catégorie Automobile renommée Vehicules
-  + Mots-clés orientés vers D:\SynologyDrive\_Vehicules\
+  + Mots-clés orientés vers D:\\SynologyDrive\\_Vehicules\\
   + Sous-dossiers par véhicule : BMW S1000R, Buell, Citroen_C3,
     Copen, DACIA Duster, Secma F16, Suzuki DR750, YUBA Fastrack
 
@@ -1316,7 +1316,7 @@ Un document est envoyé en quarantaine quand :
 
 Depuis cette fenêtre, vous pouvez relancer la classification
 de chaque document manuellement.
-Dossier physique configuré dans Paramètres (D:\_A_Classer par défaut).
+Dossier physique configuré dans Paramètres (D:\\_A_Classer par défaut).
 """,
             "Mappages": """
 FONCTION : Mappages
@@ -1384,7 +1384,7 @@ Configure l'application :
 
   Chemins
   • Dossier racine GED (ex: D:\\)
-  • Dossier quarantaine (ex: D:\_A_Classer)
+  • Dossier quarantaine (ex: D:\\_A_Classer)
   • Chemin Tesseract OCR
   • Dossier de sortie scanner
   • Langue OCR (fra+eng recommandé)
