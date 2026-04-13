@@ -80,6 +80,12 @@ class GEDManagerApp:
                 sg.Button("📦  Traitement en masse", key="-MASSE-",
                           size=(22, 2), font=FONT_MAIN),
             ],
+            [
+                sg.Button("📖  Manuel", key="-MANUEL-",
+                          size=(22, 2), font=FONT_MAIN),
+                sg.Button("📋  Changelog", key="-CHANGELOG-",
+                          size=(22, 2), font=FONT_MAIN),
+            ],
             [sg.HorizontalSeparator()],
             [sg.Multiline("Prêt.\n", key="-LOG-", size=(58, 8),
                           font=FONT_MONO, disabled=True, autoscroll=True)],
@@ -116,6 +122,10 @@ class GEDManagerApp:
                 self._action_masse()
             elif event == "-HISTORIQUE-":
                 self._action_historique()
+            elif event == "-MANUEL-":
+                self._action_manuel()
+            elif event == "-CHANGELOG-":
+                self._action_changelog()
             elif event == "-OPENLOG-":
                 self._action_open_log()
             elif event == "-SCAN-DONE-":
@@ -1122,6 +1132,358 @@ class GEDManagerApp:
                 save_types(current_types)
                 win["-TYPELIST-"].update(values=current_types)
                 self._log(f"Type supprime : '{type_del}'")
+
+        win.close()
+
+    def _action_changelog(self):
+        """Popup changelog versions GED-Manager"""
+        CHANGELOG = """
+GED-Manager — Historique des versions
+════════════════════════════════════════════
+
+v1.8 — Manuel, Changelog, Lanceur (actuelle)
+  + Bouton Manuel : notice d'utilisation avec glossaire
+  + Bouton Changelog : historique des versions
+  + Lanceur GED-Manager.vbs (sans fenêtre noire)
+  + Script creer_raccourci.bat pour icône sur le bureau
+
+v1.7 — PSM Tesseract configurable depuis l'interface
+  + Menu déroulant PSM dans Paramètres (5 modes présélectionnés)
+  + Bouton ? avec aide complète (14 modes PSM commentés)
+  + Checkbox prétraitement OpenCV dans Paramètres
+  + Changements PSM pris en compte sans redémarrage
+
+v1.6 — Amélioration OCR (PSM6 + OpenCV)
+  + PSM 6 actif par défaut (meilleur pour factures/courriers)
+  + Prétraitement OpenCV optionnel : débruitage, binarisation, deskew
+  + Fichier original jamais modifié (traitement en mémoire uniquement)
+  + Paramètres dans ged_config.ini (retour arrière facile)
+
+v1.5 — Traitement en masse + règle sous-chemin
+  + Bouton Traitement en masse : sélection multi-fichiers
+  + File d'attente avec tableau de statut et barre de progression
+  + Validation document par document (Classer / Quarantaine / Passer)
+  + Récapitulatif final (classés / quarantaine / annulés)
+  + Règle sous-chemin : dossier plus précis toujours privilégié
+  + Seuil de confiance hybride configurable (désactivé par défaut)
+
+v1.4.2 — Mots-clés véhicules
+  + Catégorie Automobile renommée Vehicules
+  + Mots-clés orientés vers D:\SynologyDrive\_Vehicules\
+  + Sous-dossiers par véhicule : BMW S1000R, Buell, Citroen_C3,
+    Copen, DACIA Duster, Secma F16, Suzuki DR750, YUBA Fastrack
+
+v1.4.1 — Normalisation accents et casse
+  + Insensible aux accents ET à la casse dans tout l'OCR
+  + 'Société' = 'societe' = 'SOCIETE' pour la classification
+  + Correction encodage corrompu (SociÃ©tÃ© etc.)
+
+v1.4 — Édition mots-clés + tri par colonne
+  + Clic sur une ligne → chargement dans le formulaire d'édition
+  + Boutons Enregistrer modification / Annuler édition
+  + Radio buttons de tri : Mot-clé / Dossier cible / Catégorie
+  + Correction corruption main_window.py (méthodes dupliquées)
+
+v1.3 — Diagnostic et Historique
+  + Texte OCR extrait visible dans la fenêtre de classification
+  + Log de diagnostic OCR dans la zone principale
+  + Bouton Historique : 50 derniers documents traités
+  + Bouton Ouvrir log : ouvre ged_manager.log dans le Bloc-notes
+
+v1.2 — Renommage automatique
+  + Dialogue de renommage : Société_Type_Date.pdf
+  + Détection automatique du type de document
+  + Liste des types éditable depuis l'interface
+  + Fichier document_types.json avec mots-clés de détection
+  + Boutons : Renommer et classer / Classer sans renommer
+
+v1.1 — OCR amélioré et mots-clés
+  + Analyse sur la 1ère page uniquement (moins de faux positifs)
+  + keywords.json : mots-clés éditables sans toucher au code
+  + Résolution OCR 3x (~216 DPI)
+  + Mots-clés plus spécifiques (suppression des 3 lettres)
+
+v1.0 — MVP initial
+  + Interface graphique PySimpleGUI
+  + OCR Tesseract (fra+eng)
+  + Classification par mots-clés → dossier
+  + Mode apprentissage : mappage manuel mémorisé
+  + Documents incertains → quarantaine
+  + Scanner CANON DR-C125 (WIA + fallback dossier surveillé)
+  + Vérification stabilité fichier scanner (anti-fichier partiel)
+  + Recherche, Quarantaine, Mappages, Paramètres
+  + Base SQLite : mappages + historique + quarantaine
+  + Logs horodatés
+"""
+        sg.popup_scrolled(
+            CHANGELOG,
+            title="Changelog — GED-Manager",
+            size=(62, 30),
+            font=FONT_MONO,
+        )
+
+    def _action_manuel(self):
+        """Manuel d'utilisation avec glossaire interactif"""
+
+        SECTIONS = {
+            "Modus operandi — Scanner et classer": """
+MODUS OPERANDI — Scanner un document et le classer
+══════════════════════════════════════════════════
+
+1. Placez le document dans le chargeur du scanner
+2. Cliquez sur [Scanner]
+3. L'application attend le fichier scanné (mode dossier surveillé)
+4. Une fois détecté, l'OCR extrait le texte automatiquement
+5. Une fenêtre de classification s'ouvre :
+   • Les mots-clés détectés sont affichés
+   • Le texte OCR de la 1ère page est visible
+   • Les suggestions de dossier sont proposées
+6. Choisissez une suggestion ou saisissez manuellement
+7. Cliquez sur [Renommer et classer] ou [Classer sans renommer]
+8. Le document est déplacé dans le bon dossier
+   Le mappage est mémorisé pour les prochains documents similaires
+
+Conseil : scanner en N&B à 400 DPI pour une meilleure reconnaissance.
+""",
+            "Modus operandi — Fichier existant": """
+MODUS OPERANDI — Classer un fichier existant
+══════════════════════════════════════════════════
+
+1. Cliquez sur [Fichier existant]
+2. Sélectionnez le PDF ou l'image à classer
+3. L'OCR analyse automatiquement le document
+4. La fenêtre de classification s'ouvre
+5. Suivez les étapes 5 à 8 du modus operandi Scanner
+""",
+            "Modus operandi — Traitement en masse": """
+MODUS OPERANDI — Traiter plusieurs documents d'un coup
+══════════════════════════════════════════════════
+
+1. Cliquez sur [Traitement en masse]
+2. Sélectionnez plusieurs fichiers (Ctrl+clic dans l'explorateur)
+3. Une file d'attente s'affiche avec le statut de chaque document
+4. Cliquez sur [Démarrer]
+5. Pour chaque document, une fenêtre de classification s'ouvre
+   Choisissez : Classer / Quarantaine / Passer
+6. Le récapitulatif final indique :
+   Classés ✅ | Quarantaine 📥 | Annulés ❌
+
+Conseil : les documents non reconnus peuvent être envoyés en
+quarantaine pour être traités plus tard.
+""",
+            "Fichier existant": """
+FONCTION : Fichier existant
+════════════════════════════
+
+Permet de sélectionner un fichier PDF ou image déjà présent
+sur votre ordinateur pour le classer dans la GED.
+
+Formats acceptés : PDF, JPG, PNG, TIFF
+Accès : bouton [Fichier existant] en haut de la fenêtre principale
+""",
+            "Scanner": """
+FONCTION : Scanner
+════════════════════
+
+Lance l'acquisition depuis le scanner CANON DR-C125.
+Deux modes automatiques :
+  • WIA (direct) : tentative de scan direct
+  • Dossier surveillé (fallback) : attend qu'un fichier
+    apparaisse dans le dossier de sortie du scanner
+    (configuré dans Paramètres)
+
+Vérification de stabilité : le fichier est attendu stable
+(taille identique 3x) avant traitement pour éviter les
+fichiers partiels en cours de transfert.
+""",
+            "Rechercher": """
+FONCTION : Rechercher
+═══════════════════════
+
+Recherche dans l'historique des documents classés.
+Critères : nom de fichier, mot-clé détecté, dossier destination.
+Accès : bouton [Rechercher]
+""",
+            "Quarantaine": """
+FONCTION : Quarantaine
+═════════════════════════
+
+Affiche les documents en attente de classement manuel.
+Un document est envoyé en quarantaine quand :
+  • Aucun mot-clé n'est reconnu
+  • Le texte OCR est vide
+  • Vous avez cliqué [Quarantaine] lors de la classification
+
+Depuis cette fenêtre, vous pouvez relancer la classification
+de chaque document manuellement.
+Dossier physique configuré dans Paramètres (D:\_A_Classer par défaut).
+""",
+            "Mappages": """
+FONCTION : Mappages
+═════════════════════
+
+Affiche et gère les associations apprises :
+  mot-clé détecté → dossier de destination
+
+Différence avec Mots-clés :
+  • Mappages : appris automatiquement lors du classement manuel
+    Stockés en base de données (ged_manager.db)
+    Priorité maximale (score x10)
+  • Mots-clés : liste de référence éditable (keywords.json)
+    Priorité secondaire (score x5)
+""",
+            "Mots-clés": """
+FONCTION : Mots-clés
+═══════════════════════
+
+Gère la liste de référence des mots-clés de classification.
+
+Fonctionnalités :
+  • Ajouter un mot-clé et son dossier cible
+  • Cliquer une ligne pour éditer (modifier mot-clé, dossier, catégorie)
+  • Supprimer un mot-clé sélectionné
+  • Trier par colonne : Mot-clé / Dossier cible / Catégorie
+  • Gérer la liste des types de documents (renommage)
+
+Les comparaisons sont insensibles aux accents ET à la casse.
+Modifications prises en compte à la fermeture de la fenêtre.
+""",
+            "Traitement en masse": """
+FONCTION : Traitement en masse
+══════════════════════════════════
+
+Traite plusieurs documents en file d'attente.
+Sélection : Ctrl+clic dans l'explorateur Windows.
+
+Statuts possibles :
+  En attente   — pas encore traité
+  En cours...  — OCR + classification en cours
+  Classé ✅     — déplacé dans le bon dossier
+  Quarantaine 📥 — envoyé en attente de classement manuel
+  Annulé ❌    — ignoré (Passer ou fichier introuvable)
+
+Mode hybride (avancé) : si le score de confiance dépasse
+le seuil configuré, le classement est automatique.
+Désactivé par défaut (seuil = 0).
+""",
+            "Historique": """
+FONCTION : Historique
+══════════════════════
+
+Affiche les 50 derniers documents traités avec :
+  • Date et heure
+  • Nom du fichier original
+  • Dossier de destination
+  • Mot-clé ayant déclenché le classement
+""",
+            "Paramètres": """
+FONCTION : Paramètres
+══════════════════════
+
+Configure l'application :
+
+  Chemins
+  • Dossier racine GED (ex: D:\\)
+  • Dossier quarantaine (ex: D:\_A_Classer)
+  • Chemin Tesseract OCR
+  • Dossier de sortie scanner
+  • Langue OCR (fra+eng recommandé)
+
+  OCR avancé
+  • PSM Tesseract : mode de segmentation de page
+    (6 recommandé pour factures/courriers)
+    Bouton [?] pour aide complète sur les 14 modes
+  • Prétraitement OpenCV : débruitage + binarisation + deskew
+    Tester sur quelques documents avant d'activer définitivement
+    Fichier original jamais modifié (traitement en mémoire)
+
+Sauvegardes dans ged_config.ini (modifiable aussi manuellement).
+""",
+            "Ouvrir log": """
+FONCTION : Ouvrir log
+══════════════════════
+
+Ouvre le fichier ged_manager.log dans le Bloc-notes Windows.
+Contient toutes les actions horodatées : classements, erreurs,
+clés détectées, déplacements de fichiers.
+Utile pour diagnostiquer un problème de classification.
+""",
+            "Renommage automatique": """
+FONCTION : Renommage automatique
+══════════════════════════════════
+
+Propose un nom standardisé avant classement :
+  Format : Société_Type_Date.pdf
+  Exemple : EDF_Facture_2024-03.pdf
+
+Le type est détecté automatiquement puis proposé modifiable.
+La date est saisie manuellement (format libre).
+
+Deux boutons au choix :
+  [Renommer et classer] — applique le nouveau nom
+  [Classer sans renommer] — conserve le nom original
+""",
+            "Classification et scores": """
+FONCTION : Classification et scores
+════════════════════════════════════
+
+Le système calcule un score pour chaque mot-clé détecté :
+  • Mappage appris (base données) : score x10 par occurrence
+  • Mot-clé de référence (keywords.json) : score x5 par occurrence
+
+Règle sous-chemin : si deux dossiers détectés dont l'un est
+sous-dossier de l'autre, le plus précis est toujours privilégié.
+Ex: _Vehicules + Citroen_C3 dans le même doc → Citroen_C3 gagne.
+
+Analyse sur la 1ère page uniquement pour éviter les faux positifs.
+Comparaison insensible aux accents et à la casse.
+""",
+        }
+
+        glossaire = list(SECTIONS.keys())
+        first_key = glossaire[0]
+
+        layout = [
+            [sg.Text("Manuel d'utilisation — GED-Manager", font=FONT_TITLE)],
+            [sg.HorizontalSeparator()],
+            [
+                sg.Column(
+                    [[sg.Listbox(
+                        values=glossaire,
+                        size=(28, 20),
+                        key="-GLOSSAIRE-",
+                        enable_events=True,
+                        font=FONT_MAIN,
+                    )]],
+                    vertical_alignment="top",
+                ),
+                sg.VSeparator(),
+                sg.Column(
+                    [[sg.Multiline(
+                        SECTIONS[first_key],
+                        size=(48, 20),
+                        disabled=True,
+                        key="-CONTENU-",
+                        font=FONT_MONO,
+                        autoscroll=False,
+                    )]],
+                    vertical_alignment="top",
+                ),
+            ],
+            [sg.HorizontalSeparator()],
+            [sg.Button("Fermer", key="-MCLOSE-")],
+        ]
+
+        win = sg.Window("Manuel — GED-Manager", layout, modal=True, finalize=True)
+        win["-GLOSSAIRE-"].update(set_to_index=[0])
+
+        while True:
+            ev, vals = win.read()
+            if ev in (sg.WIN_CLOSED, "-MCLOSE-"):
+                break
+            elif ev == "-GLOSSAIRE-" and vals["-GLOSSAIRE-"]:
+                selected = vals["-GLOSSAIRE-"][0]
+                win["-CONTENU-"].update(SECTIONS.get(selected, ""))
 
         win.close()
 
