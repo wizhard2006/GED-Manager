@@ -75,6 +75,8 @@ class GEDManagerApp:
             [
                 sg.Button("🔑  Mots-clés", key="-KEYWORDS-",
                           size=(22, 2), font=FONT_MAIN),
+                sg.Button("📦  Traitement en masse", key="-MASSE-",
+                          size=(22, 2), font=FONT_MAIN),
             ],
             [sg.HorizontalSeparator()],
             [sg.Multiline("Prêt.\n", key="-LOG-", size=(58, 8),
@@ -108,6 +110,8 @@ class GEDManagerApp:
                 self._action_params()
             elif event == "-KEYWORDS-":
                 self._action_keywords()
+            elif event == "-MASSE-":
+                self._action_masse()
             elif event == "-HISTORIQUE-":
                 self._action_historique()
             elif event == "-OPENLOG-":
@@ -609,6 +613,252 @@ class GEDManagerApp:
             os.startfile(log_path)
         else:
             sg.popup_error(f"Fichier log introuvable :\n{log_path}")
+
+    def _action_masse(self):
+        """Traitement en masse : file d'attente de documents, validation un par un."""
+
+        # --- Sélection multi-fichiers ---
+        files_str = sg.popup_get_file(
+            "Sélectionnez les documents à traiter",
+            title="Traitement en masse",
+            multiple_files=True,
+            file_types=(("PDF Files", "*.pdf"), ("Images", "*.jpg *.jpeg *.png *.tiff")),
+        )
+        if not files_str:
+            return
+
+        # PySimpleGUI retourne les fichiers séparés par ";"
+        file_list = [f.strip() for f in files_str.split(";") if f.strip()]
+        if not file_list:
+            return
+
+        total = len(file_list)
+        self._log(f"Traitement en masse : {total} document(s) sélectionné(s).")
+
+        # --- Statuts possibles ---
+        STATUT = {"attente": "En attente", "ok": "Classé ✅", "quar": "Quarantaine 📥", "annule": "Annulé ❌"}
+
+        # --- Construction de la liste de statuts ---
+        statuts = [STATUT["attente"]] * total
+        noms = [os.path.basename(f) for f in file_list]
+        rows = [[noms[i], statuts[i]] for i in range(total)]
+
+        layout = [
+            [sg.Text(f"File d'attente — {total} document(s)", font=FONT_TITLE)],
+            [sg.Table(
+                values=rows,
+                headings=["Fichier", "Statut"],
+                col_widths=[45, 15],
+                auto_size_columns=False,
+                num_rows=min(15, max(5, total)),
+                key="-MTABLE-",
+                justification="left",
+                font=FONT_MAIN,
+            )],
+            [sg.HorizontalSeparator()],
+            [sg.ProgressBar(total, orientation="h", size=(40, 20), key="-MPROG-")],
+            [sg.Text("Prêt.", key="-MSTATUS-", font=FONT_MAIN, size=(55, 1))],
+            [sg.HorizontalSeparator()],
+            [
+                sg.Button("▶  Démarrer", key="-MSTART-"),
+                sg.Button("Fermer", key="-MCLOSE-"),
+            ],
+        ]
+
+        win = sg.Window("Traitement en masse", layout, modal=True, finalize=True)
+
+        # Compteurs récapitulatif
+        nb_classe = 0
+        nb_quar = 0
+        nb_annule = 0
+        started = False
+
+        while True:
+            ev, vals = win.read(timeout=100)
+            if ev in (sg.WIN_CLOSED, "-MCLOSE-"):
+                break
+
+            elif ev == "-MSTART-" and not started:
+                started = True
+                win["-MSTART-"].update(disabled=True)
+
+                for i, file_path in enumerate(file_list):
+                    nom = noms[i]
+                    win["-MSTATUS-"].update(f"Traitement {i+1}/{total} : {nom}")
+                    rows[i][1] = "En cours..."
+                    win["-MTABLE-"].update(values=rows)
+                    win.refresh()
+
+                    if not os.path.exists(file_path):
+                        rows[i][1] = "Introuvable ⚠️"
+                        win["-MTABLE-"].update(values=rows)
+                        nb_annule += 1
+                        continue
+
+                    # OCR
+                    text = self.ocr.extract_text(file_path)
+                    if not text.strip():
+                        dest = self.file_manager.send_to_quarantine(
+                            file_path, detected_keywords="AUCUN_TEXTE"
+                        )
+                        rows[i][1] = STATUT["quar"]
+                        win["-MTABLE-"].update(values=rows)
+                        self._log(f"[Masse] Quarantaine (aucun texte) : {nom}")
+                        nb_quar += 1
+                        win["-MPROG-"].update(i + 1)
+                        win.refresh()
+                        continue
+
+                    # Classification
+                    candidates = self.classifier.classify(text)
+                    detected_kws = ", ".join([c["keyword"] for c in candidates[:5]])
+
+                    # Mode hybride : si seuil actifé et score suffisant → auto
+                    threshold = self.config.auto_classify_threshold
+                    top = candidates[0] if candidates else None
+                    auto_ok = threshold > 0 and top and top["score"] >= threshold
+
+                    if auto_ok:
+                        # Classement automatique silencieux
+                        final_path = self._propose_rename(file_path, top["keyword"], text)
+                        if final_path:
+                            dest = self.file_manager.move_file(
+                                final_path, top["folder"], top["keyword"], detected_kws
+                            )
+                            rows[i][1] = STATUT["ok"]
+                            self._log(f"[Masse/Auto] Classé : {nom} → {dest}")
+                            nb_classe += 1
+                        else:
+                            rows[i][1] = STATUT["annule"]
+                            nb_annule += 1
+                    else:
+                        # Mode 2 : validation manuelle pour ce document
+                        # On ferme temporairement la fenêtre de masse (hide)
+                        win.hide()
+                        self._proposer_classification_masse(
+                            file_path, candidates, text, detected_kws,
+                            callback_ok=lambda d, s: None,   # résultat via _last_masse
+                        )
+                        # Récupérer le résultat de la classification
+                        result = getattr(self, "_masse_last_result", None)
+                        win.un_hide()
+
+                        if result == "classe":
+                            rows[i][1] = STATUT["ok"]
+                            nb_classe += 1
+                        elif result == "quarantaine":
+                            rows[i][1] = STATUT["quar"]
+                            nb_quar += 1
+                        else:
+                            rows[i][1] = STATUT["annule"]
+                            nb_annule += 1
+
+                        self._masse_last_result = None
+
+                    win["-MTABLE-"].update(values=rows)
+                    win["-MPROG-"].update(i + 1)
+                    win.refresh()
+
+                # Récapitulatif final
+                win["-MSTATUS-"].update(
+                    f"Terminé — Classés : {nb_classe}  |  "
+                    f"Quarantaine : {nb_quar}  |  Annulés : {nb_annule}"
+                )
+                win["-MSTART-"].update(visible=False)
+                self._log(
+                    f"[Masse] Terminé : {nb_classe} classé(s), "
+                    f"{nb_quar} quarantaine, {nb_annule} annulé(s)."
+                )
+
+        win.close()
+
+    def _proposer_classification_masse(self, file_path, candidates, text,
+                                       detected_kws, callback_ok=None):
+        """
+        Variante de _proposer_classification pour le mode masse.
+        Stocke le résultat dans self._masse_last_result :
+          'classe' | 'quarantaine' | 'annule'
+        """
+        self._masse_last_result = "annule"
+        filename = os.path.basename(file_path)
+        suggestions = [f"{c['keyword']} → {c['folder']}" for c in candidates[:3]]
+        if not suggestions:
+            suggestions = ["(aucune suggestion)"]
+
+        first_page_text = text.split("\f")[0] if "\f" in text else text[:3000]
+        ocr_preview = first_page_text[:1500]
+
+        layout = [
+            [sg.Text(f"Document : {filename}", font=FONT_MAIN)],
+            [sg.Text("Mots-clés détectés :", font=FONT_MAIN)],
+            [sg.Text(detected_kws or "aucun", font=FONT_MONO)],
+            [sg.HorizontalSeparator()],
+            [sg.Text("Texte reconnu par OCR (1ère page) :", font=FONT_MAIN)],
+            [sg.Multiline(ocr_preview, size=(60, 6), disabled=True,
+                          font=FONT_MONO, autoscroll=False)],
+            [sg.HorizontalSeparator()],
+            [sg.Text("Suggestions :", font=FONT_MAIN)],
+            [sg.Listbox(values=suggestions, size=(55, 4), key="-SUGGESTIONS-",
+                        enable_events=True)],
+            [sg.HorizontalSeparator()],
+            [sg.Text("Ou saisissez manuellement :", font=FONT_MAIN)],
+            [sg.Text("Mot-clé / Origine :"),
+             sg.Input(key="-KW-", size=(30, 1))],
+            [sg.Text("Dossier destination :"),
+             sg.Input(key="-FOLDER-", size=(30, 1)),
+             sg.FolderBrowse("Parcourir", initial_folder=self.config.ged_root,
+                             target="-FOLDER-")],
+            [sg.Checkbox("Mémoriser ce mappage", default=True, key="-LEARN-")],
+            [sg.HorizontalSeparator()],
+            [
+                sg.Button("✅ Classer", key="-OK-"),
+                sg.Button("📥 Quarantaine", key="-QUAR-"),
+                sg.Button("⏭ Passer (annuler)", key="-SKIP-"),
+            ],
+        ]
+
+        win = sg.Window(
+            f"Classer — {filename}", layout, modal=True, finalize=True
+        )
+
+        while True:
+            ev, vals = win.read()
+            if ev in (sg.WIN_CLOSED, "-SKIP-"):
+                self._masse_last_result = "annule"
+                break
+            elif ev == "-SUGGESTIONS-" and vals["-SUGGESTIONS-"]:
+                selected = vals["-SUGGESTIONS-"][0]
+                if "→" in selected:
+                    kw, folder = selected.split("→", 1)
+                    win["-KW-"].update(kw.strip())
+                    win["-FOLDER-"].update(folder.strip())
+            elif ev == "-QUAR-":
+                dest = self.file_manager.send_to_quarantine(file_path, detected_kws)
+                self._log(f"[Masse] Quarantaine : {filename} → {dest}")
+                self._masse_last_result = "quarantaine"
+                break
+            elif ev == "-OK-":
+                kw = vals["-KW-"].strip()
+                folder = vals["-FOLDER-"].strip()
+                if os.path.isabs(folder) and folder.startswith(self.config.ged_root):
+                    folder = os.path.relpath(folder, self.config.ged_root)
+                if not folder:
+                    sg.popup_error("Veuillez indiquer un dossier de destination.")
+                    continue
+                if kw and vals["-LEARN-"]:
+                    self.mapper.learn(kw, folder)
+                final_path = self._propose_rename(file_path, kw, text)
+                if final_path is None:
+                    self._masse_last_result = "annule"
+                    break
+                dest = self.file_manager.move_file(
+                    final_path, folder, kw, detected_kws
+                )
+                self._log(f"[Masse] Classé : {filename} → {dest}")
+                self._masse_last_result = "classe"
+                break
+
+        win.close()
 
     def _action_keywords(self):
         """Fenetre de gestion des mots-cles (keywords.json) - v1.4 : edition + tri"""

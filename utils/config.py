@@ -25,6 +25,12 @@ DEFAULTS = {
         "db_file": "ged_manager.db",
         "language": "fra+eng",
     },
+    "classification": {
+        # Seuil de confiance pour le mode hybride (0 = désactivé, validation toujours demandée)
+        # Quand > 0, les documents avec score >= seuil sont classés automatiquement
+        # sans demander de validation. Activer uniquement quand l'OCR est fiable.
+        "auto_classify_threshold": "0",
+    },
 }
 
 
@@ -85,3 +91,14 @@ class Config:
     @property
     def ocr_language(self):
         return self.get("app", "language")
+
+    @property
+    def auto_classify_threshold(self):
+        """Seuil de confiance pour classement auto en mode masse.
+        0 = toujours demander validation (Mode 2 pur).
+        Valeur typique quand actifé : 10-20.
+        """
+        try:
+            return int(self.get("classification", "auto_classify_threshold"))
+        except (ValueError, TypeError):
+            return 0

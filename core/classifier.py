@@ -110,6 +110,42 @@ class Classifier:
 
         # Trier par score décroissant
         results = sorted(scores.values(), key=lambda x: x["score"], reverse=True)
+
+        # Règle sous-chemin : si plusieurs dossiers détectés et que l'un est
+        # sous-chemin d'un autre, on remonte le plus précis en tête de liste.
+        # Ex: '_Vehicules' + 'Citroen_C3' -> Citroen_C3 gagne car plus précis.
+        results = self._promote_subpath(results)
+
+        return results
+
+    def _promote_subpath(self, results: list) -> list:
+        """
+        Parmi les résultats, si un dossier B est sous-chemin d'un dossier A,
+        B est plus précis : on lui ajoute un bonus de score pour le faire remonter.
+        Fonctionne avec chemins absolus (D:\\...) et relatifs.
+        """
+        if len(results) < 2:
+            return results
+
+        folders = [r["folder"] for r in results]
+
+        # Normaliser les séparateurs pour la comparaison
+        def norm_path(p):
+            return os.path.normcase(os.path.normpath(p))
+
+        for i, res_i in enumerate(results):
+            fi = norm_path(res_i["folder"])
+            for j, res_j in enumerate(results):
+                if i == j:
+                    continue
+                fj = norm_path(res_j["folder"])
+                # Si fi commence par fj + séparateur → fi est sous-chemin de fj
+                # fi est plus précis, on lui ajoute un bonus
+                if fi.startswith(fj + os.sep) and res_i["score"] <= res_j["score"]:
+                    results[i]["score"] = res_j["score"] + 1
+
+        # Re-trier après bonus
+        results = sorted(results, key=lambda x: x["score"], reverse=True)
         return results
 
     def top_suggestion(self, text: str):
