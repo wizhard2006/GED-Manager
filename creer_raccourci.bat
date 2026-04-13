@@ -7,9 +7,13 @@ setlocal
 
 SET SCRIPT_DIR=%~dp0
 SET VBS_PATH=%SCRIPT_DIR%GED-Manager.vbs
-SET SHORTCUT_PATH=%USERPROFILE%\Desktop\GED-Manager.lnk
 
 echo Creation du raccourci sur le bureau...
+
+REM Recuperer le chemin reel du bureau via PowerShell (fonctionne en francais et en anglais)
+FOR /F "usebackq delims=" %%D IN (`powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`) DO SET DESKTOP=%%D
+
+SET SHORTCUT_PATH=%DESKTOP%\GED-Manager.lnk
 
 powershell -NoProfile -Command ^
   "$ws = New-Object -ComObject WScript.Shell; " ^
